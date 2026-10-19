@@ -1,12 +1,47 @@
 import cv2
 import numpy as np
 
-FILE_PATH = "../Database/IMG_3086.jpeg"
+FILE_PATH = "../Database/IMG_3089.jpeg"
+PARAMS = {
+    "scale": 0.15, 
+    # approx_card
+    "min_vertices": 4,
+    "max_vertices": 6,
+    "min_area": 1000,
+    "max_area_ratio": 0.1,
+    "min_ratio": 0.5,
+    "max_ratio": 2.0,
+    # first_detection
+    "d1_blur": 11,
+    "d1_canny_lo": 50,
+    "d1_canny_hi": 150,
+    "d1_eps": 0.02,
+    # second_detection
+    "d2_blur": 9,
+    "d2_canny_lo": 20,
+    "d2_canny_hi": 120,
+    "d2_eps": 0.05,
+    "d2_close_k": 3,
+    "d2_close_iter": 2,
+    "d2_dilate_iter": 1,
+    # third_detection
+    "d3_bil_d": 9,
+    "d3_bil_color": 75,
+    "d3_bil_space": 75,
+    "d3_canny_lo": 40,
+    "d3_canny_hi": 140,
+    "d3_eps": 0.03,
+    # merge / final / crop
+    "merge_dist": 30,
+    "final_area_tol": 9000,
+    "crop_margin": 20,
+}
 
 
 def start(img_path):
     img = cv2.imread(img_path, cv2.IMREAD_COLOR)
-    img = cv2.resize(img, None, fx=0.2, fy=0.2, interpolation=cv2.INTER_AREA)
+    img = cv2.resize(img, (340, 604), interpolation=cv2.INTER_AREA)
+
 
     debug = True
 
@@ -37,31 +72,31 @@ def start(img_path):
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    print("crop...")
-    crop_image(cards_checked, img, debug)
+    # print("crop...")
+    # crop_image(cards_checked, img, debug)
 
     print("image detection done.")
 
 
 def approx_card(approx, img_area):
-    if len(approx) < 4 or len(approx) > 6:
-        # if (len(approx) != 4):
+    if len(approx) < PARAMS["min_vertices"] or len(approx) > PARAMS["max_vertices"]:
         return False
 
     # Area check
     area = cv2.contourArea(approx)
-    if area < 1000 or area > img_area * 0.1:
+    if area < PARAMS["min_area"] or area > img_area * PARAMS["max_area_ratio"]:
         return False
 
     # Ratio check
     _x, _y, w, h = cv2.boundingRect(approx)
     ratio = w / h
-    return not (ratio < 0.5 or ratio > 2.0)
+    return not (ratio < PARAMS["min_ratio"] or ratio > PARAMS["max_ratio"])
 
 
 def first_detection(img, debug):
-    filtered = cv2.GaussianBlur(img, (11, 11), 0)
-    filtered = cv2.Canny(filtered, 50, 150)
+    k = PARAMS["d1_blur"]
+    filtered = cv2.GaussianBlur(img, (k, k), 0)
+    filtered = cv2.Canny(filtered, PARAMS["d1_canny_lo"], PARAMS["d1_canny_hi"])
 
     contours, _ = cv2.findContours(filtered, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     filtered = cv2.cvtColor(filtered, cv2.COLOR_GRAY2BGR)
@@ -72,7 +107,7 @@ def first_detection(img, debug):
     cards = []
 
     for i, contour in enumerate(contours):
-        epsilon = 0.02 * cv2.arcLength(contour, True)
+        epsilon = PARAMS["d1_eps"] * cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, epsilon, True)
 
         if approx_card(approx, filtered_area):
@@ -96,8 +131,12 @@ def first_detection(img, debug):
 
 
 def second_detection(img, debug):
-    filtered = cv2.GaussianBlur(img, (9, 9), 0)
-    filtered = cv2.Canny(filtered, 20, 120)
+    k = PARAMS["d2_blur"]
+    filtered = cv2.GaussianBlur(img, (k, k), 0)
+    filtered = cv2.Canny(filtered, PARAMS["d2_canny_lo"], PARAMS["d2_canny_hi"])
+    kk = np.ones((PARAMS["d2_close_k"], PARAMS["d2_close_k"]), np.uint8)
+    filtered = cv2.morphologyEx(filtered, cv2.MORPH_CLOSE, kk, iterations=PARAMS["d2_close_iter"])
+    filtered = cv2.dilate(filtered, kk, iterations=PARAMS["d2_dilate_iter"])
 
     # Morphological closing
     k = np.ones((3, 3), np.uint8)
@@ -113,8 +152,8 @@ def second_detection(img, debug):
     cards = []
 
     for i, contour in enumerate(contours):
-        epsilon = 0.05 * cv2.arcLength(contour, True)
-        approx = contour, epsilon, True
+        epsilon = PARAMS["d2_eps"] * cv2.arcLength(contour, True)
+        approx = cv2.approxPolyDP(contour, epsilon, True)
 
         if approx_card(approx, filtered_area):
             if len(approx) > 4:
@@ -139,9 +178,9 @@ def second_detection(img, debug):
 
 
 def third_detection(img, debug):
-    filtered = cv2.bilateralFilter(img, 9, 75, 75)
+    filtered = cv2.bilateralFilter(img, PARAMS["d3_bil_d"], PARAMS["d3_bil_color"], PARAMS["d3_bil_space"])
     gray = cv2.cvtColor(filtered, cv2.COLOR_BGR2GRAY)
-    filtered = cv2.Canny(gray, 40, 140)
+    filtered = cv2.Canny(gray, PARAMS["d3_canny_lo"], PARAMS["d3_canny_hi"])
 
     contours, _ = cv2.findContours(filtered, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     filtered = cv2.cvtColor(filtered, cv2.COLOR_GRAY2BGR)
@@ -152,7 +191,7 @@ def third_detection(img, debug):
     cards = []
 
     for i, contour in enumerate(contours):
-        epsilon = 0.03 * cv2.arcLength(contour, True)
+        epsilon = PARAMS["d3_eps"] * cv2.arcLength(contour, True)
         approx = cv2.approxPolyDP(contour, epsilon, True)
 
         if approx_card(approx, filtered_area):
@@ -180,7 +219,9 @@ def card_center(card):
     return np.mean(card, axis=0)
 
 
-def merge_cards(cards, img, debug, dist_thresh=30):
+def merge_cards(cards, img, debug, dist_thresh=None):
+    dist_thresh = dist_thresh or PARAMS["merge_dist"]
+
     merged = []
 
     for card in cards:
@@ -219,7 +260,7 @@ def final_card_check(cards, img, debug):
     mean = cards_area_mean(cards)
     cards_checked = []
     for card in cards:
-        if abs(cv2.contourArea(card) - mean) < 9000:
+        if abs(cv2.contourArea(card) - mean) < PARAMS["final_area_tol"]:
             cards_checked.append(card)
 
     result = None
@@ -236,15 +277,15 @@ def final_card_check(cards, img, debug):
 
 def crop_image(cards, img, debug):
     h, w = img.shape[:2]
-
+    m = PARAMS["crop_margin"] 
     for i, card in enumerate(cards):
         x_coords = card[:, 0]
         y_coords = card[:, 1]
 
-        x_min = max(0, np.min(x_coords) - 20)
-        x_max = min(w, np.max(x_coords) + 20)
-        y_min = max(0, np.min(y_coords) - 20)
-        y_max = min(h, np.max(y_coords) + 20)
+        x_min = max(0, np.min(x_coords) - m)
+        x_max = min(w, np.max(x_coords) + m)
+        y_min = max(0, np.min(y_coords) - m)
+        y_max = min(h, np.max(y_coords) + m)
 
         card_pic = img[y_min:y_max, x_min:x_max]
         cv2.imwrite(f"card_{i}.jpg", card_pic)
