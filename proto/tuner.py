@@ -1,7 +1,7 @@
 import cv2
 import tkinter as tk
 from tkinter import ttk
-import memo as det
+import proto.cards_detection as det
 
 IMG_PATH = det.FILE_PATH
 full = cv2.imread(IMG_PATH, cv2.IMREAD_COLOR)

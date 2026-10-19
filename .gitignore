@@ -1,3 +1,4 @@
 Database/
 *.ipynb
 __pycache__
+proto/cards/

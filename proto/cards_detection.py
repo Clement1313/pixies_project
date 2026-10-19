@@ -2,13 +2,14 @@ import cv2
 import numpy as np
 
 FILE_PATH = "../Database/IMG_3089.jpeg"
+DEBUG = False
 PARAMS = {
-    "scale": 0.15, 
+    "scale": 0.15,
     # approx_card
     "min_vertices": 4,
     "max_vertices": 6,
     "min_area": 1000,
-    "max_area_ratio": 0.1,
+    "max_area_ratio": 0.08,
     "min_ratio": 0.5,
     "max_ratio": 2.0,
     # first_detection
@@ -38,12 +39,9 @@ PARAMS = {
 }
 
 
-def start(img_path):
+def start(img_path, debug=False):
     img = cv2.imread(img_path, cv2.IMREAD_COLOR)
     img = cv2.resize(img, (340, 604), interpolation=cv2.INTER_AREA)
-
-
-    debug = True
 
     print("filters...")
     cards1, filtered = first_detection(img, debug)
@@ -72,8 +70,8 @@ def start(img_path):
         cv2.waitKey(0)
         cv2.destroyAllWindows()
 
-    # print("crop...")
-    # crop_image(cards_checked, img, debug)
+    print("crop...")
+    crop_image(cards_checked, img, debug)
 
     print("image detection done.")
 
@@ -135,7 +133,9 @@ def second_detection(img, debug):
     filtered = cv2.GaussianBlur(img, (k, k), 0)
     filtered = cv2.Canny(filtered, PARAMS["d2_canny_lo"], PARAMS["d2_canny_hi"])
     kk = np.ones((PARAMS["d2_close_k"], PARAMS["d2_close_k"]), np.uint8)
-    filtered = cv2.morphologyEx(filtered, cv2.MORPH_CLOSE, kk, iterations=PARAMS["d2_close_iter"])
+    filtered = cv2.morphologyEx(
+        filtered, cv2.MORPH_CLOSE, kk, iterations=PARAMS["d2_close_iter"]
+    )
     filtered = cv2.dilate(filtered, kk, iterations=PARAMS["d2_dilate_iter"])
 
     # Morphological closing
@@ -178,7 +178,9 @@ def second_detection(img, debug):
 
 
 def third_detection(img, debug):
-    filtered = cv2.bilateralFilter(img, PARAMS["d3_bil_d"], PARAMS["d3_bil_color"], PARAMS["d3_bil_space"])
+    filtered = cv2.bilateralFilter(
+        img, PARAMS["d3_bil_d"], PARAMS["d3_bil_color"], PARAMS["d3_bil_space"]
+    )
     gray = cv2.cvtColor(filtered, cv2.COLOR_BGR2GRAY)
     filtered = cv2.Canny(gray, PARAMS["d3_canny_lo"], PARAMS["d3_canny_hi"])
 
@@ -277,7 +279,7 @@ def final_card_check(cards, img, debug):
 
 def crop_image(cards, img, debug):
     h, w = img.shape[:2]
-    m = PARAMS["crop_margin"] 
+    m = PARAMS["crop_margin"]
     for i, card in enumerate(cards):
         x_coords = card[:, 0]
         y_coords = card[:, 1]
@@ -288,7 +290,7 @@ def crop_image(cards, img, debug):
         y_max = min(h, np.max(y_coords) + m)
 
         card_pic = img[y_min:y_max, x_min:x_max]
-        cv2.imwrite(f"card_{i}.jpg", card_pic)
+        cv2.imwrite(f"cards/card_{i}.jpg", card_pic)
 
         if debug:
             cv2.imshow("Cropped Image", card_pic)
@@ -355,4 +357,4 @@ def fourth_detection(img, debug):
 
 
 if __name__ == "__main__":
-    start(FILE_PATH)
+    start(FILE_PATH, debug=DEBUG)
